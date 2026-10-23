@@ -193,6 +193,24 @@ pub fn dist_to_polygon_outline(p: Vec2, poly: &[Vec2]) -> f32 {
         .fold(f32::INFINITY, f32::min)
 }
 
+/// Light low-pass filter: `passes` rounds of a [1, 2, 1] / 4 kernel over the
+/// interior points (endpoints stay put). Irons out input jitter while
+/// barely shrinking curves sampled densely.
+pub fn smooth_polyline(points: &[Vec2], passes: usize) -> Vec<Vec2> {
+    let mut pts = points.to_vec();
+    if pts.len() < 3 {
+        return pts;
+    }
+    let mut prev = pts.clone();
+    for _ in 0..passes {
+        prev.copy_from_slice(&pts);
+        for i in 1..pts.len() - 1 {
+            pts[i] = (prev[i - 1] + prev[i] * 2.0 + prev[i + 1]) * 0.25;
+        }
+    }
+    pts
+}
+
 /// Ramer–Douglas–Peucker polyline simplification.
 pub fn simplify_rdp(points: &[Vec2], epsilon: f32) -> Vec<Vec2> {
     if points.len() < 3 {

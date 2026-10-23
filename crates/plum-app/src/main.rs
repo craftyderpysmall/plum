@@ -20,7 +20,8 @@ fn main() -> eframe::Result {
             .with_title("Plum")
             .with_app_id("plum")
             .with_inner_size([1280.0, 800.0])
-            .with_min_inner_size([480.0, 320.0]),
+            .with_min_inner_size([480.0, 320.0])
+            .with_icon(eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png")).expect("bundled icon is a valid PNG")),
         ..Default::default()
     };
     eframe::run_native("Plum", options, Box::new(move |cc| Ok(Box::new(app::PlumApp::new(cc, open)))))

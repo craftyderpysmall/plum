@@ -2,7 +2,7 @@ use glam::Vec2;
 use serde::{Deserialize, Serialize};
 
 use crate::element::{ElementBehavior, Style};
-use crate::geom::{Rect, dist_to_segment, point_in_polygon, simplify_rdp};
+use crate::geom::{Rect, dist_to_segment, point_in_polygon, simplify_rdp, smooth_polyline};
 
 /// Freehand polyline, points relative to the element origin.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -12,10 +12,10 @@ pub struct Stroke {
 
 impl Stroke {
     /// Build from absolute points (already relative to `origin`'s frame):
-    /// simplifies and re-centers so local coordinates stay small.
-    /// Returns the stroke and the offset its origin moved by.
+    /// smooths out jitter, simplifies and re-centers so local coordinates stay
+    /// small. Returns the stroke and the offset its origin moved by.
     pub fn finish(points: &[Vec2], simplify_eps: f32) -> (Self, Vec2) {
-        let pts = if simplify_eps > 0.0 { simplify_rdp(points, simplify_eps) } else { points.to_vec() };
+        let pts = if simplify_eps > 0.0 { simplify_rdp(&smooth_polyline(points, 2), simplify_eps) } else { points.to_vec() };
         let c = Rect::from_points(pts.iter().copied()).center();
         let c = if c.is_finite() { c } else { Vec2::ZERO };
         (Self { points: pts.into_iter().map(|p| p - c).collect() }, c)
@@ -62,6 +62,17 @@ mod tests {
         let (s, off) = Stroke::finish(&[Vec2::new(10.0, 10.0), Vec2::new(20.0, 30.0)], 0.0);
         assert_eq!(off, Vec2::new(15.0, 20.0));
         assert_eq!(s.points[0], Vec2::new(-5.0, -10.0));
+    }
+
+    #[test]
+    fn finish_smooths_jitter_but_keeps_endpoints() {
+        // A straight line with ±0.5 zigzag noise.
+        let pts: Vec<Vec2> = (0..=40).map(|i| Vec2::new(i as f32, if i % 2 == 0 { 0.5 } else { -0.5 })).collect();
+        let (s, off) = Stroke::finish(&pts, 0.3);
+        let abs: Vec<Vec2> = s.points.iter().map(|p| *p + off).collect();
+        assert!(abs[0].distance(pts[0]) < 1e-4);
+        assert!(abs.last().unwrap().distance(pts[40]) < 1e-4);
+        assert!(abs[1..abs.len() - 1].iter().all(|p| p.y.abs() < 0.2));
     }
 
     #[test]
