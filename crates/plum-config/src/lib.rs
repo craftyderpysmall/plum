@@ -19,13 +19,8 @@ pub use watch::{ConfigWatcher, watch};
 
 pub const DEFAULT_TOML: &str = include_str!("../default.toml");
 
-/// Themes shipped inside the binary. `default` is the empty theme.
-pub const BUNDLED_THEMES: &[(&str, &str)] = &[
-    ("default", ""),
-    ("dark", include_str!("../themes/dark.toml")),
-    ("nord", include_str!("../themes/nord.toml")),
-    ("solarized", include_str!("../themes/solarized.toml")),
-];
+/// Themes shipped inside the binary. `dark` is the empty theme (`default.toml` is dark).
+pub const BUNDLED_THEMES: &[(&str, &str)] = &[("dark", ""), ("light", include_str!("../themes/light.toml"))];
 
 #[derive(Debug, thiserror::Error)]
 pub enum ConfigError {
@@ -75,7 +70,7 @@ impl ConfigDirs {
                 &cfg,
                 "# Your Plum overrides. Only add the keys you want to change;\n\
                  # see default.toml.example for every option.\n\n\
-                 theme = \"default\"\n",
+                 theme = \"dark\"\n",
             )?;
         }
         Ok(())
@@ -174,7 +169,7 @@ pub fn resolve(
         .and_then(|(_, t)| t.get("theme"))
         .and_then(|v| v.as_str())
         .or_else(|| defaults.get("theme").and_then(|v| v.as_str()))
-        .unwrap_or("default")
+        .unwrap_or("dark")
         .to_string();
 
     // Walk `extends` from the selected theme to its root.

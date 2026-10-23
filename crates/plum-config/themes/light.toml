@@ -1,0 +1,33 @@
+[meta]
+name = "Plum Light"
+author = "Plum"
+
+[colors]
+canvas         = "#fafafa"
+grid           = "#e2e2e2"
+grid_major     = "#c9c9c9"
+selection      = "#7a1a5d"
+selection_fill = "#7a1a5d0f"
+marquee        = "#7a1a5d"
+marquee_fill   = "#7a1a5d1a"
+hover          = "#7a1a5d55"
+handle_fill    = "#fafafa"
+handle_stroke  = "#7a1a5d"
+rotate_handle  = "#7a1a5d"
+panel          = "#fffffffa"
+panel_border   = "#15151514"
+panel_shadow   = "#1515151f"
+text           = "#151515"
+text_muted     = "#7a7a7a"
+accent         = "#580f41"
+accent_text    = "#fafafa"
+button_hover   = "#1515150d"
+placeholder    = "#c2338f"
+error          = "#d64545"
+
+[palette]
+colors = [
+  "#151515", "#8a8a8a", "#e03131", "#f08c00",
+  "#2f9e44", "#1971c2", "#7a1a5d", "#e64980",
+  "#fafafa",
+]

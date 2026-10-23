@@ -38,14 +38,14 @@ Config lives in your config folder (`%APPDATA%\plum\` on Windows,
 `~/.config/plum/` on Linux, `~/Library/Application Support/plum/` on macOS):
 
 ```
-config.toml          your overrides, e.g. theme = "nord"
+config.toml          your overrides, e.g. theme = "light"
 themes/<name>.toml   custom themes
 default.toml.example every available option, with comments
 ```
 
 Settings resolve in layers — built-in `default.toml` → theme (and any theme it
 `extends`) → `config.toml` — and each layer only needs the keys it changes.
-Files hot-reload while Plum runs. Bundled themes: `default`, `dark`, `nord`, `solarized`.
+Files hot-reload while Plum runs. Bundled themes: `dark` (default) and `light`.
 
 You can configure colors, sizes, toolbar position, font (`ui.font_file`;
 JetBrains Mono by default), grid, palette, tool defaults, every keybind,

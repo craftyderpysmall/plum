@@ -12,8 +12,8 @@ fn bundled_only(name: &str) -> Result<(String, Table), ConfigError> {
 fn embedded_default_resolves() {
     let r = resolve(None, bundled_only).unwrap();
     assert!(r.warnings.is_empty(), "{:?}", r.warnings);
-    assert_eq!(r.config.theme, "default");
-    assert_eq!(r.config.colors.canvas, Color([0xf7, 0xf5, 0xf2, 255]));
+    assert_eq!(r.config.theme, "dark");
+    assert_eq!(r.config.colors.canvas, Color([0x15, 0x15, 0x15, 255]));
     assert_eq!(r.config.keybinds["redo"].0, vec!["Ctrl+Shift+Z", "Ctrl+Y"]);
     assert_eq!(r.config.keybinds["reset_position"].0, vec!["Ctrl+9"]);
     assert_eq!(r.config.tools.pen.color, ColorRef::Palette(0));
@@ -70,11 +70,13 @@ fn partial_theme_falls_back_per_key() {
 
 #[test]
 fn extends_chain_applies_base_first() {
-    // nord extends dark: nord's canvas wins, dark's panel_border shows through.
-    let user = t("theme = \"nord\"");
-    let r = resolve(Some(("config.toml", &user)), bundled_only).unwrap().config;
+    // child extends light: child's canvas wins, light's panel_border shows through.
+    let user = t("theme = \"child\"");
+    let child = t("[meta]\nextends = \"light\"\n[colors]\ncanvas = \"#2e3440\"\n[ui]\ncorner_radius = 6.0");
+    let find = |n: &str| if n == "child" { Ok(("child.toml".into(), child.clone())) } else { bundled_only(n) };
+    let r = resolve(Some(("config.toml", &user)), find).unwrap().config;
     assert_eq!(r.colors.canvas, Color::parse("#2e3440").unwrap());
-    assert_eq!(r.colors.panel_border, Color::parse("#ffffff14").unwrap());
+    assert_eq!(r.colors.panel_border, Color::parse("#15151514").unwrap());
     assert_eq!(r.ui.corner_radius, 6.0);
 }
 
@@ -90,10 +92,10 @@ fn extends_cycle_is_an_error() {
 
 #[test]
 fn user_config_overrides_theme() {
-    let user = t("theme = \"dark\"\n[colors]\ncanvas = \"#123456\"\n[ui]\ntoolbar_position = \"top\"");
+    let user = t("theme = \"light\"\n[colors]\ncanvas = \"#123456\"\n[ui]\ntoolbar_position = \"top\"");
     let r = resolve(Some(("config.toml", &user)), bundled_only).unwrap().config;
     assert_eq!(r.colors.canvas, Color::parse("#123456").unwrap());
-    assert_eq!(r.colors.text, Color::parse("#e8e6ea").unwrap());
+    assert_eq!(r.colors.text, Color::parse("#151515").unwrap());
     assert_eq!(r.ui.toolbar_position, ToolbarPosition::Top);
 }
 
@@ -122,10 +124,10 @@ fn missing_theme_falls_back_with_warning() {
 #[test]
 fn set_theme_preserves_rest_of_file() {
     let src = "# my config\ntheme = \"dark\"\n\n[colors]\ncanvas = \"#000000\"\n";
-    let out = set_top_level_key(src, "theme", "\"nord\"");
-    assert_eq!(out, "# my config\ntheme = \"nord\"\n\n[colors]\ncanvas = \"#000000\"\n");
-    let out = set_top_level_key("[ui]\nshadow = false\n", "theme", "\"nord\"");
-    assert_eq!(out, "theme = \"nord\"\n[ui]\nshadow = false\n");
+    let out = set_top_level_key(src, "theme", "\"light\"");
+    assert_eq!(out, "# my config\ntheme = \"light\"\n\n[colors]\ncanvas = \"#000000\"\n");
+    let out = set_top_level_key("[ui]\nshadow = false\n", "theme", "\"light\"");
+    assert_eq!(out, "theme = \"light\"\n[ui]\nshadow = false\n");
 }
 
 #[test]
@@ -133,13 +135,13 @@ fn user_dir_themes_override_bundled() {
     let root = std::env::temp_dir().join(format!("plum-cfg-test-{}", std::process::id()));
     let dirs = ConfigDirs { root: Some(root.clone()) };
     dirs.ensure_scaffold().unwrap();
-    fs::write(root.join("themes").join("dark.toml"), "[colors]\ncanvas = \"#010203\"").unwrap();
+    fs::write(root.join("themes").join("light.toml"), "[colors]\ncanvas = \"#010203\"").unwrap();
     fs::write(root.join("themes").join("zzz.toml"), "").unwrap();
-    dirs.set_theme("dark").unwrap();
+    dirs.set_theme("light").unwrap();
     let r = dirs.load().unwrap().config;
     assert_eq!(r.colors.canvas, Color([1, 2, 3, 255]));
-    // User "dark" replaces the bundled one entirely, so its text color is the default's.
-    assert_eq!(r.colors.text, Color::parse("#2b2b2b").unwrap());
+    // User "light" replaces the bundled one entirely, so its text color is the default's.
+    assert_eq!(r.colors.text, Color::parse("#fafafa").unwrap());
     assert!(dirs.theme_names().ends_with(&["zzz".to_string()]));
     fs::remove_dir_all(root).unwrap();
 }

@@ -19,38 +19,38 @@
 #  Files are hot-reloaded while Plum is running.
 # ─────────────────────────────────────────────────────────────────────────────
 
-# Active theme: a bundled theme (default, dark, nord, solarized) or the file
-# name (without .toml) of one in your themes/ folder.
-theme = "default"
+# Active theme: a bundled theme (dark, light) or the file name (without
+# .toml) of one in your themes/ folder. The values in this file are "dark".
+theme = "dark"
 
 [meta]
-name = "Plum Default"
+name = "Plum Dark"
 author = "Plum"
-# Theme files can inherit from another theme, e.g. extends = "dark".
+# Theme files can inherit from another theme, e.g. extends = "light".
 extends = ""
 
 [colors]
-canvas         = "#f7f5f2"
-grid           = "#dcd6ce"
-grid_major     = "#c4bcb1"
-selection      = "#7c4dff"
-selection_fill = "#7c4dff0f"
-marquee        = "#7c4dff"
-marquee_fill   = "#7c4dff1a"
-hover          = "#7c4dff66"
-handle_fill    = "#ffffff"
-handle_stroke  = "#7c4dff"
-rotate_handle  = "#7c4dff"
-panel          = "#fffffffa"
-panel_border   = "#1b1a1e14"
-panel_shadow   = "#1b1a1e1c"
-text           = "#2b2b2b"
-text_muted     = "#8a857e"
-accent         = "#7c4dff"
-accent_text    = "#ffffff"
-button_hover   = "#1b1a1e0d"
-placeholder    = "#e05297"
-error          = "#d64545"
+canvas         = "#151515"
+grid           = "#262626"
+grid_major     = "#333333"
+selection      = "#c4569e"
+selection_fill = "#c4569e12"
+marquee        = "#c4569e"
+marquee_fill   = "#c4569e1f"
+hover          = "#c4569e66"
+handle_fill    = "#151515"
+handle_stroke  = "#c4569e"
+rotate_handle  = "#c4569e"
+panel          = "#2a2a2af5"
+panel_border   = "#ffffff12"
+panel_shadow   = "#00000080"
+text           = "#fafafa"
+text_muted     = "#8f8f8f"
+accent         = "#c4569e"
+accent_text    = "#151515"
+button_hover   = "#ffffff10"
+placeholder    = "#e070b4"
+error          = "#ff6b6b"
 
 [ui]
 toolbar_position = "left"   # left | right | top | bottom
@@ -94,9 +94,9 @@ zoom_overshoot      = 1.6
 
 [palette]
 colors = [
-  "#2b2b2b", "#868e96", "#e03131", "#f08c00",
-  "#2f9e44", "#1971c2", "#7c4dff", "#e64980",
-  "#ffffff",
+  "#fafafa", "#b1b1b1", "#ff6b6b", "#ffa94d",
+  "#69db7c", "#4dabf7", "#c4569e", "#f783ac",
+  "#151515",
 ]
 
 # Tool colors are a palette slot (0 = first swatch above) or a fixed "#hex".
