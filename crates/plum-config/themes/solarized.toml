@@ -1,0 +1,29 @@
+[meta]
+name = "Solarized Light"
+author = "Plum"
+
+[colors]
+canvas         = "#fdf6e3"
+grid           = "#eee8d5"
+grid_major     = "#e2dbc6"
+selection      = "#268bd2"
+selection_fill = "#268bd20f"
+marquee        = "#268bd2"
+marquee_fill   = "#268bd21a"
+hover          = "#268bd266"
+handle_stroke  = "#268bd2"
+rotate_handle  = "#268bd2"
+panel          = "#fdf6e3f2"
+text           = "#586e75"
+text_muted     = "#93a1a1"
+accent         = "#268bd2"
+
+[grid]
+style = "lines"
+
+[palette]
+colors = [
+  "#586e75", "#93a1a1", "#dc322f", "#cb4b16",
+  "#859900", "#268bd2", "#6c71c4", "#d33682",
+  "#fdf6e3",
+]

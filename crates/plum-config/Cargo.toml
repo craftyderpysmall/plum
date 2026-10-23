@@ -1,0 +1,12 @@
+[package]
+name = "plum-config"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+dirs = "7.0.0"
+notify = "8.2.0"
+serde = { version = "1.0.229", features = ["derive"] }
+thiserror = "2.0.21"
+toml = "1.1.8"
+toml_edit = "0.25.17"

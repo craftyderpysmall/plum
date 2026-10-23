@@ -1,0 +1,200 @@
+# ─────────────────────────────────────────────────────────────────────────────
+#  Plum default configuration
+#
+#  This file defines EVERY setting. It is built into the app and can't break.
+#
+#  To customise, create files in your Plum config folder
+#  (Windows: %APPDATA%\plum\, macOS: ~/Library/Application Support/plum/,
+#   Linux: ~/.config/plum/):
+#
+#    config.toml        your personal overrides + which theme to use
+#    themes/<name>.toml custom themes
+#
+#  Both only need the keys they change — anything missing falls back to the
+#  values below. Layers are merged in this order (later wins):
+#
+#    default.toml  →  theme (and whatever it `extends`)  →  config.toml
+#
+#  Colors are "#rrggbb" or "#rrggbbaa". Optional colors also accept "none".
+#  Files are hot-reloaded while Plum is running.
+# ─────────────────────────────────────────────────────────────────────────────
+
+# Active theme: a bundled theme (default, dark, nord, solarized) or the file
+# name (without .toml) of one in your themes/ folder.
+theme = "default"
+
+[meta]
+name = "Plum Default"
+author = "Plum"
+# Theme files can inherit from another theme, e.g. extends = "dark".
+extends = ""
+
+[colors]
+canvas         = "#f7f5f2"
+grid           = "#dcd6ce"
+grid_major     = "#c4bcb1"
+selection      = "#7c4dff"
+selection_fill = "#7c4dff0f"
+marquee        = "#7c4dff"
+marquee_fill   = "#7c4dff1a"
+hover          = "#7c4dff66"
+handle_fill    = "#ffffff"
+handle_stroke  = "#7c4dff"
+rotate_handle  = "#7c4dff"
+panel          = "#fffffffa"
+panel_border   = "#1b1a1e14"
+panel_shadow   = "#1b1a1e1c"
+text           = "#2b2b2b"
+text_muted     = "#8a857e"
+accent         = "#7c4dff"
+accent_text    = "#ffffff"
+button_hover   = "#1b1a1e0d"
+placeholder    = "#e05297"
+error          = "#d64545"
+
+[ui]
+toolbar_position = "left"   # left | right | top | bottom
+button_size      = 34.0
+icon_size        = 18.0
+corner_radius    = 12.0
+spacing          = 2.0
+margin           = 14.0     # distance of floating panels from the window edge
+shadow           = true
+font_size        = 13.0
+# Speed of UI motion (hover fades, panels sliding in, smooth zoom).
+# 1.0 = default, 2.0 = twice as fast, 0 = no animation.
+animation_speed  = 1.0
+# Path to a .ttf/.otf used for the interface and text elements;
+# "" = built-in JetBrains Mono.
+font_file        = ""
+handle_size      = 8.0      # selection handles, in screen pixels
+rotate_handle_distance = 26.0
+show_context_bar = true
+show_style_panel = true
+
+[grid]
+style       = "dots"   # dots | lines | none
+spacing     = 24.0     # world units at zoom 1
+major_every = 5
+# Grid levels closer than this many screen pixels fade out.
+min_screen_spacing = 10.0
+
+[canvas]
+min_zoom            = 0.02
+max_zoom            = 64.0
+zoom_speed          = 1.0
+pan_speed           = 1.0
+rotate_snap_degrees = 15.0
+nudge               = 1.0    # screen pixels
+nudge_large         = 10.0
+hit_tolerance       = 6.0   # screen pixels
+snap_to_grid        = false # initial state of the "Snap to grid" toggle
+# How far past min/max zoom you can push before it springs back (1.0 = no give).
+zoom_overshoot      = 1.6
+
+[palette]
+colors = [
+  "#2b2b2b", "#868e96", "#e03131", "#f08c00",
+  "#2f9e44", "#1971c2", "#7c4dff", "#e64980",
+  "#ffffff",
+]
+
+# Tool colors are a palette slot (0 = first swatch above) or a fixed "#hex".
+# Palette slots follow the theme: slot 0 is dark ink on light themes and
+# light ink on dark ones, and drawings recolor when you switch themes.
+# Opacity is 0.0–1.0.
+
+[tools.pen]
+color     = 0
+width     = 3.0
+opacity   = 1.0
+smoothing = 0.6   # simplification tolerance in screen pixels (0 = keep every point)
+
+[tools.shape]
+color   = 0
+fill    = "none"
+width   = 2.0
+opacity = 1.0
+
+[tools.line]
+color   = 0
+width   = 2.0
+opacity = 1.0
+
+[tools.arrow]
+color   = 0
+width   = 2.0
+opacity = 1.0
+
+[tools.text]
+color     = 0
+font_size = 24.0
+opacity   = 1.0
+
+# The fill bucket fills shapes and closed pencil loops.
+[tools.bucket]
+color = 6
+
+# Each action takes a chord ("Ctrl+Shift+Z"), a list of chords, or [] for none.
+# Modifiers: Ctrl (Cmd on macOS), Shift, Alt. Keys use egui names
+# (A-Z, 0-9, F1-F12, Delete, Backspace, Escape, Enter, Space, ArrowUp,
+#  OpenBracket, CloseBracket, Plus, Minus, Comma, ...).
+# Tip: Menu → Settings lets you rebind these by pressing keys.
+[keybinds]
+tool_select    = "V"
+tool_pen       = "P"
+tool_rect      = "R"
+tool_ellipse   = "O"
+tool_diamond   = "D"
+tool_line      = "L"
+tool_arrow     = "A"
+tool_text      = "T"
+tool_bucket    = "B"
+tool_hand      = "H"
+undo           = "Ctrl+Z"
+redo           = ["Ctrl+Shift+Z", "Ctrl+Y"]
+select_all     = "Ctrl+A"
+delete         = ["Delete", "Backspace"]
+duplicate      = "Ctrl+D"
+copy           = "Ctrl+C"
+paste          = "Ctrl+V"
+cut            = "Ctrl+X"
+flip_h         = "Shift+H"
+flip_v         = "Shift+V"
+rotate_cw      = "Shift+R"
+rotate_ccw     = "Shift+E"
+bring_forward  = "CloseBracket"
+send_backward  = "OpenBracket"
+bring_to_front = "Ctrl+CloseBracket"
+send_to_back   = "Ctrl+OpenBracket"
+zoom_in        = ["Ctrl+Plus", "Ctrl+Equals"]
+zoom_out       = "Ctrl+Minus"
+zoom_reset     = "Ctrl+0"
+zoom_fit       = "Shift+1"
+reset_position = "Ctrl+9"
+toggle_snap    = "Ctrl+G"
+settings       = "Ctrl+Comma"
+new            = "Ctrl+N"
+open           = "Ctrl+O"
+save           = "Ctrl+S"
+save_as        = "Ctrl+Shift+S"
+perf_overlay   = "F3"
+deselect       = "Escape"
+# Nudge moves by [canvas] nudge / nudge_large screen pixels.
+nudge_left        = "ArrowLeft"
+nudge_right       = "ArrowRight"
+nudge_up          = "ArrowUp"
+nudge_down        = "ArrowDown"
+nudge_left_large  = "Shift+ArrowLeft"
+nudge_right_large = "Shift+ArrowRight"
+nudge_up_large    = "Shift+ArrowUp"
+nudge_down_large  = "Shift+ArrowDown"
+
+[performance]
+# Cached element meshes are rebuilt when zoom crosses a power of this factor.
+zoom_bucket_factor = 1.5
+# Drop cached meshes not drawn for this many frames.
+mesh_cache_frames  = 240
+# Elements smaller than this on screen (pixels) are drawn as a single dot.
+lod_min_screen_size = 1.5
+undo_limit = 500

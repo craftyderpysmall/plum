@@ -1,0 +1,9 @@
+[package]
+name = "plum-core"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+glam = { version = "0.34.1", features = ["serde"] }
+rstar = "0.13.0"
+serde = { version = "1.0.229", features = ["derive"] }
