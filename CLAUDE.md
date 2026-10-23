@@ -9,9 +9,10 @@
 ## Releasing
 - Version source of truth = `crates/plum-app/Cargo.toml` (other crates stay put). Bump it, then run any cargo build so `Cargo.lock` updates: CI builds with `--locked` and fails on a stale lock.
 - Run the gate, commit, then `git tag vX.Y.Z` (must equal the plum-app version; CI checks) and `git push origin main vX.Y.Z`.
-- `.github/workflows/release.yml` (windows-latest, MSVC) builds, zips `plum.exe` as `plum-X.Y.Z-x86_64-windows.zip`, creates the GitHub release, then commits the new url/hash to `bucket/plum.json` on main. Don't hand-edit the manifest; `git pull` afterwards to pick up that bot commit.
-- Watch with `gh run watch` / `gh run list --workflow release.yml`; verify with `gh release view vX.Y.Z` and the manifest on main. If CI fails before publishing: fix, delete the tag locally and remotely (`git push origin :refs/tags/vX.Y.Z`), retag, push.
-- Scoop users update with `scoop update; scoop update plum` (bucket = this repo).
+- `.github/workflows/release.yml` (windows-latest, MSVC) builds, zips `plum.exe` as `plum-X.Y.Z-x86_64-windows.zip`, creates the GitHub release, then runs `wingetcreate update craftyderpysmall.Plum ... --submit` to open a PR on microsoft/winget-pkgs (zip with nested portable `plum.exe`, alias `plum`). That step is skipped unless the `WINGET_TOKEN` repo secret (classic PAT, `public_repo`) is set. No manifests live in this repo.
+- Watch with `gh run watch` / `gh run list --workflow release.yml`; verify with `gh release view vX.Y.Z` and the winget-pkgs PR (`gh pr list -R microsoft/winget-pkgs --search craftyderpysmall.Plum`). If CI fails before publishing: fix, delete the tag locally and remotely (`git push origin :refs/tags/vX.Y.Z`), retag, push.
+- Users install/update with `winget install craftyderpysmall.Plum` / `winget upgrade craftyderpysmall.Plum` once the PR is merged (usually hours to a day).
+- `git` is not on PATH in this shell: prefix commands with `$env:PATH = "C:\Program Files\Git\cmd;$env:PATH";`.
 - App icon: `crates/plum-app/assets/` (`icon.svg` source, `icon.png` window icon, `icon.ico` embedded in the exe by `build.rs` via `winresource`). Regenerate png/ico from the svg with ImageMagick (installed via scoop).
 
 ## Crates

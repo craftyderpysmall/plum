@@ -18,12 +18,13 @@ Built on [egui](https://github.com/emilk/egui)/eframe (wgpu). No web runtime.
 
 ## Installing
 
-With [Scoop](https://scoop.sh) (Windows, x64):
+With [winget](https://learn.microsoft.com/windows/package-manager/) (Windows, x64):
 
 ```powershell
-scoop bucket add plum https://github.com/craftyderpysmall/plum
-scoop install plum/plum
+winget install craftyderpysmall.Plum
 ```
+
+Update with `winget upgrade craftyderpysmall.Plum`.
 
 Or download the zip from [Releases](https://github.com/craftyderpysmall/plum/releases).
 
