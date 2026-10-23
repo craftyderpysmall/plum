@@ -94,5 +94,7 @@ crates/
 
 ## License
 
+Plum is released under the [MIT License](LICENSE).
+
 JetBrains Mono is bundled under the SIL Open Font License
 (`crates/plum-app/assets/fonts/JetBrainsMono-OFL.txt`).
