@@ -21,8 +21,8 @@ Built on [egui](https://github.com/emilk/egui)/eframe (wgpu). No web runtime.
 With [Scoop](https://scoop.sh) (Windows, x64):
 
 ```powershell
-scoop bucket add craftyderpysmall https://github.com/craftyderpysmall/scoop-bucket
-scoop install craftyderpysmall/plum
+scoop bucket add plum https://github.com/craftyderpysmall/plum
+scoop install plum/plum
 ```
 
 Or download the zip from [Releases](https://github.com/craftyderpysmall/plum/releases).

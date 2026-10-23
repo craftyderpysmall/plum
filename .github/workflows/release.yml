@@ -1,0 +1,60 @@
+# Push a tag like v0.2.0 (matching the plum-app version) to build the Windows
+# zip, publish it as a GitHub release and point the Scoop manifest at it.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - name: Check version
+        shell: pwsh
+        run: |
+          $tag = "${{ github.ref_name }}".TrimStart("v")
+          $crate = (Select-String -Path crates/plum-app/Cargo.toml -Pattern '^version = "(.+)"').Matches[0].Groups[1].Value
+          if ($tag -ne $crate) { throw "tag v$tag does not match plum-app version $crate" }
+          "VERSION=$tag" >> $env:GITHUB_ENV
+
+      - name: Build
+        run: cargo build --release --locked -p plum-app
+
+      - name: Package
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory stage | Out-Null
+          Copy-Item target/release/plum-app.exe stage/plum.exe
+          $zip = "plum-$env:VERSION-x86_64-windows.zip"
+          Compress-Archive -Path stage/plum.exe -DestinationPath $zip
+          "ZIP=$zip" >> $env:GITHUB_ENV
+          "HASH=$((Get-FileHash $zip -Algorithm SHA256).Hash.ToLower())" >> $env:GITHUB_ENV
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "${{ github.ref_name }}" "$env:ZIP" --title "Plum $env:VERSION" --generate-notes
+
+      - name: Update Scoop manifest
+        shell: pwsh
+        run: |
+          git fetch origin main
+          git checkout main
+          $m = Get-Content bucket/plum.json -Raw | ConvertFrom-Json
+          $m.version = $env:VERSION
+          $m.architecture.'64bit'.url = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/$env:ZIP"
+          $m.architecture.'64bit'.hash = $env:HASH
+          $m | ConvertTo-Json -Depth 10 | Set-Content bucket/plum.json -Encoding utf8NoBOM
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bucket/plum.json
+          git commit -m "Scoop: plum $env:VERSION"
+          git push origin main

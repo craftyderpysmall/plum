@@ -1,0 +1,20 @@
+{
+  "version": "0.1.0",
+  "description": "A minimal, fast, native whiteboard.",
+  "homepage": "https://github.com/craftyderpysmall/plum",
+  "license": "Unknown",
+  "architecture": {
+    "64bit": {
+      "url": "https://github.com/craftyderpysmall/plum/releases/download/v0.1.0/plum-0.1.0-x86_64-windows.zip",
+      "hash": "cd334b12fd509ed7f9623ae86ddb94c9bbba801796bd28001058e7599f81a92e"
+    }
+  },
+  "bin": "plum.exe",
+  "shortcuts": [
+    [
+      "plum.exe",
+      "Plum"
+    ]
+  ],
+  "notes": "Config lives in %APPDATA%\\plum\\ and is kept across updates and uninstalls."
+}
