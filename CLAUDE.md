@@ -1,7 +1,8 @@
 # Plum — native Rust whiteboard (egui/eframe 0.37, wgpu, edition 2024)
 
 ## Build / verify
-- This machine has no MSVC linker: always `cargo +stable-x86_64-pc-windows-gnu <cmd>`.
+- This machine has no MSVC linker: always `cargo +stable-x86_64-pc-windows-gnu <cmd>`. The icon embed (`winresource`) needs `windres` from MSYS2 (`C:\msys64\mingw64\bin`, on user PATH).
+- Release (MSVC) builds link the CRT statically (`.cargo/config.toml`) so `plum.exe` runs without the VC++ Redistributable; winget validation fails otherwise.
 - Gate: `cargo +stable-x86_64-pc-windows-gnu clippy --workspace --all-targets -- -D warnings` and `... test --workspace`.
 - Run: `... run --release -p plum-app -- [file.plum]`. Demo/stress boards: `-p plum-format --example make_demo -- out.plum [--stress N]`.
 - egui 0.37 APIs differ from older docs (`App::ui(&mut Ui, &mut Frame)`, `Id::unique`, `Popup::menu`, reworked fonts). Check sources in `~/.cargo/registry/src/*/egui-0.37.0` (rustup via winget; `~/.cargo`, `~/.rustup`) before guessing.
