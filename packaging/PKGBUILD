@@ -1,0 +1,49 @@
+# Packages the prebuilt GitHub release (no Rust toolchain needed):
+#
+#   cd packaging && makepkg -si
+#
+# pkgver follows crates/plum-app/Cargo.toml, so a checkout at tag vX.Y.Z
+# installs release X.Y.Z. The tarball is checked against the .sha256 file
+# CI publishes next to it.
+pkgname=plum-bin
+pkgver=$(sed -n 's/^version = "\(.*\)"/\1/p' ../crates/plum-app/Cargo.toml | head -n1)
+pkgrel=1
+pkgdesc="A minimal, fast, native whiteboard"
+arch=('x86_64')
+url="https://github.com/craftyderpysmall/plum"
+license=('MIT')
+provides=('plum')
+conflicts=('plum')
+options=('!debug')
+# Wayland, X11, Vulkan/GL and xkbcommon are dlopen'd at runtime.
+depends=('gcc-libs' 'glibc' 'libxkbcommon' 'hicolor-icon-theme')
+optdepends=(
+    'wayland: native Wayland session (preferred)'
+    'libxcursor: X11 fallback'
+    'libxrandr: X11 fallback'
+    'libxi: X11 fallback'
+    'vulkan-icd-loader: Vulkan rendering'
+    'libglvnd: OpenGL rendering fallback'
+    'xdg-desktop-portal: native file dialogs'
+    'zenity: file dialog fallback'
+)
+_name="plum-$pkgver-x86_64-linux"
+source=("$url/releases/download/v$pkgver/$_name.tar.gz"
+        "$url/releases/download/v$pkgver/$_name.tar.gz.sha256")
+# Verified in prepare() against the published .sha256.
+sha256sums=('SKIP' 'SKIP')
+
+prepare() {
+    sha256sum -c "$_name.tar.gz.sha256"
+}
+
+package() {
+    cd "$_name"
+    install -Dm755 plum "$pkgdir/usr/bin/plum"
+    install -Dm644 plum.desktop "$pkgdir/usr/share/applications/plum.desktop"
+    install -Dm644 plum.xml "$pkgdir/usr/share/mime/packages/plum.xml"
+    install -Dm644 plum.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/plum.svg"
+    install -Dm644 plum.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/plum.png"
+    install -Dm644 README.md "$pkgdir/usr/share/doc/plum/README.md"
+    install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

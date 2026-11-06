@@ -1,2 +1,9 @@
 /target
 *.plum.tmp
+
+# makepkg output
+/packaging/src/
+/packaging/pkg/
+/packaging/*.tar.gz
+/packaging/*.sha256
+/packaging/*.pkg.tar.*
