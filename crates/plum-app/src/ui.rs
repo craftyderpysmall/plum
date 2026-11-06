@@ -362,15 +362,12 @@ fn main_menu(app: &mut PlumApp, button: &egui::Response, action: &mut Option<Act
     }
 }
 
+/// Open a folder with the desktop's default handler (`xdg-open`).
 fn open_in_file_manager(path: &std::path::Path) -> std::io::Result<()> {
-    let cmd = if cfg!(windows) {
-        "explorer"
-    } else if cfg!(target_os = "macos") {
-        "open"
-    } else {
-        "xdg-open"
-    };
-    std::process::Command::new(cmd).arg(path).spawn().map(|_| ())
+    let mut child = std::process::Command::new("xdg-open").arg(path).stdin(std::process::Stdio::null()).spawn()?;
+    // Reap it so it doesn't linger as a zombie for the rest of the session.
+    std::thread::spawn(move || child.wait());
+    Ok(())
 }
 
 fn context_bar(app: &mut PlumApp, ctx: &egui::Context) {
@@ -456,7 +453,7 @@ fn style_panel(app: &mut PlumApp, ctx: &egui::Context) {
         (StyleTarget::Session, s.style, true, false, Some(s.text.font_size), true)
     } else if app.tool_kind == ToolKind::Select && !app.selection.is_empty() {
         let els = app.selection.elements(&app.board);
-        let first = els[0];
+        let Some(&first) = els.first() else { return };
         let has_fill = els.iter().any(|e| match &e.kind {
             ElementKind::Shape(_) => true,
             ElementKind::Stroke(s) => s.is_closed(e.style.width),
@@ -821,6 +818,22 @@ pub fn confirm_modal(app: &mut PlumApp, ctx: &egui::Context) {
     if let Some(a) = answer {
         app.resolve_pending(ctx, a);
     }
+}
+
+/// Dims the app while a native open/save dialog is up, so the board can't
+/// change underneath it.
+pub fn dialog_wait_modal(app: &mut PlumApp, ctx: &egui::Context) {
+    let fade_id = Id::unique("plum-dialog-wait-t");
+    if !app.file_dialog_open() {
+        app.motion.set(ctx, fade_id, 0.0);
+        return;
+    }
+    let t = app.motion.fade(ctx, fade_id, true, SMOOTH);
+    let frame = theme::panel_frame(&app.cfg).inner_margin(egui::Margin::symmetric(20, 14));
+    egui::Modal::new(Id::unique("plum-dialog-wait")).frame(frame).backdrop_color(Color32::from_black_alpha((50.0 * t) as u8)).show(ctx, |ui| {
+        ui.multiply_opacity(t);
+        ui.label(egui::RichText::new("Waiting for the file dialog\u{2026}").color(muted(app)));
+    });
 }
 
 /// Settings window: rebind any action by clicking its shortcut and pressing keys.

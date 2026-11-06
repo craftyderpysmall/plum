@@ -149,21 +149,48 @@ impl RecordCore {
     fn into_element(self, style: Style, reg: &Registry, warnings: &mut Vec<String>) -> Element {
         let r = self;
         let bounds = Rect::new(Vec2::new(r.bounds[0], r.bounds[1]), Vec2::new(r.bounds[2], r.bounds[3]));
+        let bounds = if bounds.min.is_finite() && bounds.max.is_finite() { bounds } else { Rect::EMPTY };
         let unknown = |body: Vec<u8>| ElementKind::Unknown(UnknownKind { tag: r.kind_tag, kind_version: r.kind_version, bytes: body, bounds });
+        let transform = sane_transform(r.pos, r.rotation, r.scale);
+        let style = sane_style(style);
         let kind = match reg.element(&r.kind_tag) {
             Some(c) if r.kind_version <= c.version() => match c.decode(r.kind_version, &r.body) {
                 Ok(k) => k,
                 Err(e) => {
                     warnings.push(format!("element {}: {e}; kept as opaque data", r.id));
-                    unknown(r.body)
+                    unknown(r.body.clone())
                 }
             },
-            _ => unknown(r.body),
+            _ => unknown(r.body.clone()),
         };
-        let mut el = Element::new(kind, Transform { pos: DVec2::from(r.pos), rotation: r.rotation, scale: DVec2::from(r.scale) }, style);
+        let mut el = Element::new(kind, transform, style);
+        if !el.kind.is_finite() {
+            // Geometry with NaN/inf in it can't be drawn or indexed; keep the bytes.
+            warnings.push(format!("element {}: invalid geometry; kept as opaque data", r.id));
+            el = Element::new(unknown(r.body), transform, style);
+        }
         el.id = ElementId(r.id);
         el
     }
+}
+
+/// Non-finite numbers (from a damaged file) would poison the spatial index
+/// and every hit test; replace them with neutral values.
+fn sane_transform(pos: [f64; 2], rotation: f64, scale: [f64; 2]) -> Transform {
+    let finite_or = |v: f64, d: f64| if v.is_finite() { v } else { d };
+    let scale_or_one = |v: f64| if v.is_finite() && v != 0.0 { v } else { 1.0 };
+    Transform {
+        pos: DVec2::new(finite_or(pos[0], 0.0), finite_or(pos[1], 0.0)),
+        rotation: finite_or(rotation, 0.0),
+        scale: DVec2::new(scale_or_one(scale[0]), scale_or_one(scale[1])),
+    }
+}
+
+fn sane_style(mut s: Style) -> Style {
+    if !(s.width.is_finite() && s.width >= 0.0) {
+        s.width = 1.0;
+    }
+    s
 }
 
 fn write_batches<R: Serialize>(b: &Board, reg: &Registry, f: impl Fn(&Element, RecordCore) -> R) -> Result<Vec<Vec<u8>>, FormatError> {

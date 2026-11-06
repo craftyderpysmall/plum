@@ -45,7 +45,7 @@ pub struct ConfigDirs {
 }
 
 impl ConfigDirs {
-    /// `%APPDATA%\plum`, `~/.config/plum`, ...
+    /// `$XDG_CONFIG_HOME/plum` (usually `~/.config/plum`).
     pub fn system() -> Self {
         Self { root: dirs::config_dir().map(|d| d.join("plum")) }
     }

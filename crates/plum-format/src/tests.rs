@@ -214,3 +214,89 @@ fn save_and_load_path() {
     assert!(!path.with_extension("plum.tmp").exists());
     std::fs::remove_dir_all(&dir).unwrap();
 }
+
+#[test]
+fn huge_chunk_length_is_truncation_not_oom() {
+    let mut bytes = Vec::new();
+    chunk::write_header(&mut bytes).unwrap();
+    // A chunk header claiming ~4 GiB of payload, followed by almost nothing.
+    bytes.extend_from_slice(b"ELM2");
+    bytes.push(0);
+    bytes.extend_from_slice(&u32::MAX.to_le_bytes());
+    bytes.extend_from_slice(&[0; 16]);
+    let l = from_bytes(&bytes);
+    assert!(l.board.is_empty());
+    assert!(l.warnings.iter().any(|w| w.contains("ended unexpectedly")), "{:?}", l.warnings);
+}
+
+#[test]
+fn bogus_lz4_size_is_reported_as_corrupt() {
+    let mut stored = u32::MAX.to_le_bytes().to_vec();
+    stored.extend_from_slice(&[0x10, 0x41]);
+    let mut bytes = Vec::new();
+    chunk::write_header(&mut bytes).unwrap();
+    bytes.extend_from_slice(b"ELM2");
+    bytes.push(chunk::FLAG_LZ4);
+    bytes.extend_from_slice(&(stored.len() as u32).to_le_bytes());
+    bytes.extend_from_slice(&stored);
+    bytes.extend_from_slice(&crc32fast::hash(&stored).to_le_bytes());
+    chunk::write_end(&mut bytes).unwrap();
+    let l = from_bytes(&bytes);
+    assert!(l.warnings.iter().any(|w| w.contains("implausible")), "{:?}", l.warnings);
+}
+
+#[test]
+fn non_finite_records_are_sanitized() {
+    let rec = |id, pos: [f64; 2], body: Vec<u8>, tag: [u8; 4]| v1::ElemRecordV1 {
+        id,
+        pos,
+        rotation: f64::INFINITY,
+        scale: [0.0, f64::NAN],
+        stroke: [0, 0, 0, 255],
+        fill: None,
+        width: f32::NAN,
+        bounds: [f32::NAN, 0.0, 1.0, 1.0],
+        kind_tag: tag,
+        kind_version: 1,
+        body,
+    };
+    let nan_stroke = postcard::to_allocvec(&vec![[0.0f32, f32::NAN], [1.0, 1.0]]).unwrap();
+    let recs = vec![rec(1, [f64::NAN, 5.0], postcard::to_allocvec(&serde_shape()).unwrap(), *b"SHAP"), rec(2, [0.0, 0.0], nan_stroke.clone(), *b"STRK")];
+    let mut bytes = Vec::new();
+    chunk::write_header(&mut bytes).unwrap();
+    chunk::write_chunk(&mut bytes, v1::ELEM, &postcard::to_allocvec(&recs).unwrap()).unwrap();
+    chunk::write_end(&mut bytes).unwrap();
+    let l = from_bytes(&bytes);
+    let els = l.board.elements();
+    assert_eq!(els[0].transform, Transform { pos: DVec2::new(0.0, 5.0), rotation: 0.0, scale: DVec2::ONE });
+    assert_eq!(els[0].style.width, 1.0);
+    for e in els {
+        let a = e.world_aabb();
+        assert!(a.min.is_finite() && a.max.is_finite(), "{:?}", e.id);
+    }
+    // The stroke with NaN points is kept verbatim, not dropped.
+    match &els[1].kind {
+        ElementKind::Unknown(u) => assert_eq!(u.bytes, nan_stroke),
+        k => panic!("expected opaque element, got {k:?}"),
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn save_follows_symlinks_and_keeps_permissions() {
+    use std::os::unix::fs::PermissionsExt;
+    let dir = std::env::temp_dir().join(format!("plum-test-link-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let real = dir.join("real.plum");
+    let link = dir.join("link.plum");
+    save_to_path(&sample_board(), &real).unwrap();
+    std::fs::set_permissions(&real, std::fs::Permissions::from_mode(0o600)).unwrap();
+    std::os::unix::fs::symlink(&real, &link).unwrap();
+    let mut b = sample_board();
+    b.meta.name = "via link".into();
+    save_to_path(&b, &link).unwrap();
+    assert!(std::fs::symlink_metadata(&link).unwrap().file_type().is_symlink());
+    assert_eq!(std::fs::metadata(&real).unwrap().permissions().mode() & 0o777, 0o600);
+    assert_eq!(load_from_path(&real).unwrap().board.meta.name, "via link");
+    std::fs::remove_dir_all(&dir).unwrap();
+}

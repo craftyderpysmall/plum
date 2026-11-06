@@ -1,0 +1,58 @@
+# Push a tag like v0.2.0 (matching the plum-app version) to run the gate,
+# build the Linux tarball and publish it as a GitHub release.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Check version
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          crate="$(sed -n 's/^version = "\(.*\)"/\1/p' crates/plum-app/Cargo.toml | head -n1)"
+          if [ "$tag" != "$crate" ]; then
+            echo "tag v$tag does not match plum-app version $crate" >&2
+            exit 1
+          fi
+          echo "VERSION=$tag" >> "$GITHUB_ENV"
+
+      # Wayland, X11, Vulkan/GL and the portal are all loaded at runtime, so
+      # the build needs no system -dev packages.
+      - name: Gate
+        run: |
+          cargo clippy --workspace --all-targets --locked -- -D warnings
+          cargo test --workspace --locked
+
+      - name: Build
+        run: cargo build --release --locked -p plum-app
+
+      - name: Package
+        run: |
+          name="plum-$VERSION-x86_64-linux"
+          mkdir "$name"
+          install -m755 target/release/plum "$name/plum"
+          install -m755 packaging/linux/install.sh "$name/install.sh"
+          install -m644 packaging/linux/plum.desktop packaging/linux/plum.xml README.md LICENSE "$name/"
+          install -m644 crates/plum-app/assets/icon.svg "$name/plum.svg"
+          install -m644 crates/plum-app/assets/icon.png "$name/plum.png"
+          tar -czf "$name.tar.gz" "$name"
+          sha256sum "$name.tar.gz" > "$name.tar.gz.sha256"
+          echo "TARBALL=$name.tar.gz" >> "$GITHUB_ENV"
+
+      - name: Publish release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" "$TARBALL" "$TARBALL.sha256" --title "Plum $VERSION" --generate-notes

@@ -75,8 +75,13 @@ pub fn read_chunk(r: &mut impl Read) -> Result<ChunkRead, FormatError> {
     let tag = [head[0], head[1], head[2], head[3]];
     let flags = head[4];
     let len = u32::from_le_bytes([head[5], head[6], head[7], head[8]]) as usize;
-    let mut stored = vec![0u8; len];
-    r.read_exact(&mut stored).map_err(|_| FormatError::Truncated)?;
+    // Read through `take` rather than allocating `len` up front: a damaged
+    // length field must not turn into a multi-GiB allocation.
+    let mut stored = Vec::with_capacity(len.min(1 << 20));
+    r.by_ref().take(len as u64).read_to_end(&mut stored).map_err(|_| FormatError::Truncated)?;
+    if stored.len() != len {
+        return Err(FormatError::Truncated);
+    }
     let mut crc = [0u8; 4];
     r.read_exact(&mut crc).map_err(|_| FormatError::Truncated)?;
     if tag == END {
@@ -86,6 +91,12 @@ pub fn read_chunk(r: &mut impl Read) -> Result<ChunkRead, FormatError> {
         return Ok(ChunkRead::Corrupt { tag, reason: "checksum mismatch".into() });
     }
     if flags & FLAG_LZ4 != 0 {
+        // LZ4 can't expand data more than ~255x; a bigger claimed size is bogus
+        // and would otherwise be allocated as-is.
+        let claimed = stored.get(..4).map_or(0, |b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]) as usize);
+        if claimed > stored.len().saturating_mul(255) {
+            return Ok(ChunkRead::Corrupt { tag, reason: "lz4: implausible size".into() });
+        }
         return Ok(match lz4_flex::decompress_size_prepended(&stored) {
             Ok(payload) => ChunkRead::Ok { tag, payload },
             Err(e) => ChunkRead::Corrupt { tag, reason: format!("lz4: {e}") },

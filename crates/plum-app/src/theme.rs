@@ -1,5 +1,6 @@
 //! Maps the resolved [`Config`] onto egui styling and fonts.
 
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 use egui::{Color32, CornerRadius, FontData, FontDefinitions, FontFamily, FontId, Shadow, Stroke, TextStyle};
@@ -135,9 +136,28 @@ pub fn apply_style(ctx: &egui::Context, cfg: &Config) {
     });
 }
 
+/// Where `ui.font_file` points: `~/` is the home folder and relative paths are
+/// relative to the config folder (`config_root`).
+pub fn font_path(raw: &str, config_root: Option<&Path>) -> Option<PathBuf> {
+    let raw = raw.trim();
+    if raw.is_empty() {
+        return None;
+    }
+    if let Some(rest) = raw.strip_prefix("~/")
+        && let Some(home) = std::env::var_os("HOME")
+    {
+        return Some(Path::new(&home).join(rest));
+    }
+    let p = Path::new(raw);
+    Some(match config_root {
+        Some(root) if p.is_relative() => root.join(p),
+        _ => p.to_path_buf(),
+    })
+}
+
 /// Install the configured font file, or the bundled JetBrains Mono. egui's own
 /// fonts stay behind it as fallbacks (symbols, emoji). Returns an error message on failure.
-pub fn apply_fonts(ctx: &egui::Context, cfg: &Config) -> Result<(), String> {
+pub fn apply_fonts(ctx: &egui::Context, cfg: &Config, config_root: Option<&Path>) -> Result<(), String> {
     let mut defs = FontDefinitions::default();
     let mut install = |name: &str, data: FontData| {
         defs.font_data.insert(name.into(), Arc::new(data));
@@ -146,17 +166,15 @@ pub fn apply_fonts(ctx: &egui::Context, cfg: &Config) -> Result<(), String> {
         }
     };
     install("jetbrains-mono", FontData::from_static(JETBRAINS_MONO));
-    let path = cfg.ui.font_file.trim();
-    let result = if path.is_empty() {
-        Ok(())
-    } else {
-        match std::fs::read(path) {
+    let result = match font_path(&cfg.ui.font_file, config_root) {
+        None => Ok(()),
+        Some(path) => match std::fs::read(&path) {
             Ok(bytes) => {
                 install("user", FontData::from_owned(bytes));
                 Ok(())
             }
-            Err(e) => Err(format!("font_file {path:?}: {e}")),
-        }
+            Err(e) => Err(format!("font_file {}: {e}", path.display())),
+        },
     };
     ctx.set_fonts(defs);
     result
@@ -165,4 +183,21 @@ pub fn apply_fonts(ctx: &egui::Context, cfg: &Config) -> Result<(), String> {
 fn luminance(c: Color) -> f32 {
     let [r, g, b, _] = c.0;
     (0.2126 * r as f32 + 0.7152 * g as f32 + 0.0722 * b as f32) / 255.0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn font_paths_resolve_home_and_config_relative() {
+        let root = Path::new("/cfg/plum");
+        assert_eq!(font_path("  ", Some(root)), None);
+        assert_eq!(font_path("/usr/share/fonts/a.ttf", Some(root)), Some(PathBuf::from("/usr/share/fonts/a.ttf")));
+        assert_eq!(font_path("fonts/a.ttf", Some(root)), Some(PathBuf::from("/cfg/plum/fonts/a.ttf")));
+        assert_eq!(font_path("fonts/a.ttf", None), Some(PathBuf::from("fonts/a.ttf")));
+        if let Some(home) = std::env::var_os("HOME") {
+            assert_eq!(font_path("~/f.otf", Some(root)), Some(Path::new(&home).join("f.otf")));
+        }
+    }
 }

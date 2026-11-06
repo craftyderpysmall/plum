@@ -75,6 +75,17 @@ impl ElementKind {
         }
     }
 
+    /// True if every number in the geometry is finite (no NaN/inf from a damaged file).
+    pub fn is_finite(&self) -> bool {
+        match self {
+            ElementKind::Stroke(s) => s.points.iter().all(|p| p.is_finite()),
+            ElementKind::Shape(s) => s.size.is_finite(),
+            ElementKind::Line(l) => l.a.is_finite() && l.b.is_finite(),
+            ElementKind::Text(t) => t.font_size.is_finite() && t.size.is_finite(),
+            ElementKind::Unknown(u) => u.bounds.is_empty() || (u.bounds.min.is_finite() && u.bounds.max.is_finite()),
+        }
+    }
+
     pub fn name(&self) -> &'static str {
         match self {
             ElementKind::Stroke(_) => "stroke",

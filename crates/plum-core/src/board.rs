@@ -52,12 +52,18 @@ impl Board {
     }
 
     /// Build from loaded elements (keeps their ids; bulk-loads the index).
+    /// Missing (0) or duplicate ids, e.g. from a damaged file, get fresh ones
+    /// so the id map and spatial index stay consistent.
     pub fn from_elements(meta: BoardMeta, elements: Vec<Element>) -> Self {
         let mut b = Self { meta, elements, ..Default::default() };
-        b.next_id = b.elements.iter().map(|e| e.id.0).max().unwrap_or(0) + 1;
-        for e in b.elements.iter_mut().filter(|e| e.id.0 == 0) {
-            e.id = ElementId(b.next_id);
-            b.next_id += 1;
+        b.next_id = b.elements.iter().map(|e| e.id.0).max().unwrap_or(0).saturating_add(1);
+        let mut seen = std::collections::HashSet::with_capacity(b.elements.len());
+        for e in b.elements.iter_mut() {
+            if e.id.0 == 0 || !seen.insert(e.id) {
+                e.id = ElementId(b.next_id);
+                b.next_id += 1;
+                seen.insert(e.id);
+            }
         }
         b.reindex();
         b.spatial = SpatialIndex::bulk(b.elements.iter().map(|e| (e.id, e.world_aabb())));
@@ -289,6 +295,28 @@ mod tests {
         b.remove(a);
         assert_eq!(b.hit(DVec2::new(1.0, 1.0), 0.5), None);
         assert_eq!(b.z_index(c), Some(0));
+    }
+
+    #[test]
+    fn from_elements_fixes_duplicate_and_missing_ids() {
+        let mut els: Vec<Element> = (0..4).map(|i| square(i as f64 * 20.0, 0.0)).collect();
+        els[0].id = ElementId(5);
+        els[1].id = ElementId(5);
+        els[2].id = ElementId(0);
+        els[3].id = ElementId(7);
+        let mut b = Board::from_elements(BoardMeta::default(), els);
+        let ids: Vec<ElementId> = b.elements().iter().map(|e| e.id).collect();
+        let unique: std::collections::HashSet<_> = ids.iter().collect();
+        assert_eq!(unique.len(), 4, "{ids:?}");
+        assert_eq!(ids[0], ElementId(5));
+        for (z, id) in ids.iter().enumerate() {
+            assert_eq!(b.z_index(*id), Some(z));
+        }
+        // Every element is independently removable and the index stays in sync.
+        for id in ids {
+            assert!(b.remove(id).is_some());
+        }
+        assert!(b.is_empty() && b.query(&Aabb::new(DVec2::splat(-1e9), DVec2::splat(1e9))).is_empty());
     }
 
     #[test]

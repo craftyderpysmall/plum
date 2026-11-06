@@ -93,6 +93,14 @@ pub const ACTIONS: &[(Action, &str, &str)] = &[
     (Action::PerfOverlay, "perf_overlay", "Performance overlay"),
 ];
 
+/// Result of [`Keymap::take_actions`].
+#[derive(Default)]
+pub struct Taken {
+    pub actions: Vec<Action>,
+    /// System clipboard text that came with a consumed paste shortcut.
+    pub pasted_text: Option<String>,
+}
+
 #[derive(Default)]
 pub struct Keymap {
     bindings: Vec<(Action, KeyboardShortcut)>,
@@ -114,22 +122,40 @@ impl Keymap {
         (Self { bindings }, warnings)
     }
 
-    /// Consume this frame's key presses that match a binding.
-    pub fn take_actions(&self, ctx: &egui::Context) -> Vec<Action> {
-        let mut out = Vec::new();
+    /// Consume this frame's key presses that match a binding. Also returns the
+    /// system clipboard text if a paste shortcut was consumed.
+    pub fn take_actions(&self, ctx: &egui::Context) -> Taken {
+        let mut out = Taken::default();
         ctx.input_mut(|i| {
-            i.events.retain(|ev| {
-                let Event::Key { key, modifiers, pressed: true, .. } = ev else { return true };
-                match self.bindings.iter().find(|(_, s)| s.logical_key == *key && modifiers.matches_exact(s.modifiers)) {
-                    Some((a, _)) => {
-                        out.push(*a);
-                        false
+            i.events.retain(|ev| match self.match_event(ev) {
+                Some(a) => {
+                    if let Event::Paste(text) = ev {
+                        out.pasted_text = Some(text.clone());
                     }
-                    None => true,
+                    out.actions.push(a);
+                    false
                 }
+                None => true,
             });
         });
         out
+    }
+
+    /// The action an input event triggers, if any.
+    pub fn match_event(&self, ev: &Event) -> Option<Action> {
+        // The platform layer turns Ctrl+C/X/V into clipboard events (so text
+        // boxes work); they never arrive as key presses, so map them back.
+        let (key, physical, modifiers) = match ev {
+            Event::Key { key, physical_key, modifiers, pressed: true, .. } => (*key, *physical_key, *modifiers),
+            Event::Copy => (Key::C, None, Modifiers::COMMAND),
+            Event::Cut => (Key::X, None, Modifiers::COMMAND),
+            Event::Paste(_) | Event::PasteImage(_) => (Key::V, None, Modifiers::COMMAND),
+            _ => return None,
+        };
+        let find = |k: Key| self.bindings.iter().find(|(_, s)| s.logical_key == k && modifiers.matches_exact(s.modifiers)).map(|(a, _)| *a);
+        // With Shift held the logical key is the shifted symbol ("Shift+1" is
+        // "!"), so fall back to the physical key for chords like `Shift+1`.
+        find(key).or_else(|| physical.filter(|p| modifiers.shift && *p != key).and_then(find))
     }
 
     /// Human-readable first binding of an action, for tooltips.
@@ -226,6 +252,37 @@ mod tests {
             assert_eq!(parsed.logical_key, key, "{s}");
             assert_eq!(chord_string(&parsed), s);
         }
+    }
+
+    fn key(key: Key, physical: Option<Key>, modifiers: Modifiers) -> Event {
+        Event::Key { key, physical_key: physical, pressed: true, repeat: false, modifiers }
+    }
+
+    fn default_keymap() -> Keymap {
+        let cfg = plum_config::resolve(None, |_| Ok((String::new(), Default::default()))).unwrap().config;
+        Keymap::from_config(&cfg.keybinds).0
+    }
+
+    #[test]
+    fn clipboard_events_trigger_copy_cut_paste() {
+        let km = default_keymap();
+        assert_eq!(km.match_event(&Event::Copy), Some(Action::Copy));
+        assert_eq!(km.match_event(&Event::Cut), Some(Action::Cut));
+        assert_eq!(km.match_event(&Event::Paste("x".into())), Some(Action::Paste));
+    }
+
+    #[test]
+    fn shifted_digit_matches_physical_key() {
+        let km = default_keymap();
+        // Shift+1 on a US layout arrives as logical "!" with physical "1".
+        let ev = key(Key::Exclamationmark, Some(Key::Num1), Modifiers::SHIFT);
+        assert_eq!(km.match_event(&ev), Some(Action::ZoomFit));
+        // Without Shift the physical key is never used (keeps AZERTY etc. logical).
+        assert_eq!(km.match_event(&key(Key::Q, Some(Key::A), Modifiers::NONE)), None);
+        // Logical matches still win and modifiers stay exact.
+        assert_eq!(km.match_event(&key(Key::H, Some(Key::H), Modifiers::SHIFT)), Some(Action::FlipH));
+        assert_eq!(km.match_event(&key(Key::H, Some(Key::H), Modifiers::NONE)), Some(Action::Tool(ToolKind::Hand)));
+        assert_eq!(km.match_event(&key(Key::Z, Some(Key::Z), Modifiers::CTRL | Modifiers::COMMAND)), Some(Action::Undo));
     }
 
     #[test]

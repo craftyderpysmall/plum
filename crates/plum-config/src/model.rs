@@ -9,6 +9,10 @@ pub struct Color(pub [u8; 4]);
 impl Color {
     pub fn parse(s: &str) -> Result<Self, String> {
         let hex = s.trim().strip_prefix('#').ok_or_else(|| format!("color {s:?} must start with '#'"))?;
+        // Byte-indexed slicing below would panic inside a multi-byte character.
+        if !hex.is_ascii() {
+            return Err(format!("invalid color {s:?}"));
+        }
         let byte = |i: usize| u8::from_str_radix(&hex[i..i + 2], 16).map_err(|_| format!("invalid color {s:?}"));
         match hex.len() {
             6 => Ok(Self([byte(0)?, byte(2)?, byte(4)?, 255])),

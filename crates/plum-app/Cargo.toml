@@ -3,16 +3,27 @@ name = "plum-app"
 version = "0.1.2"
 edition = "2024"
 license = "MIT"
+description = "A minimal, fast, native whiteboard"
+
+[[bin]]
+name = "plum"
+path = "src/main.rs"
 
 [dependencies]
 earcutr = "0.5.0"
-eframe = { version = "0.37.0", default-features = false, features = ["wgpu", "default_fonts", "accesskit"] }
+eframe = { version = "0.37.0", default-features = false, features = [
+    "wgpu",
+    "default_fonts",
+    "accesskit",
+    # Native Wayland (preferred) with X11 as a fallback for X sessions / XWayland.
+    "wayland",
+    "x11",
+    # System clipboard for text boxes (Wayland data-control / X11 selections).
+    "clipboard",
+] }
 egui = "0.37.0"
 glam = "0.34.1"
 plum-config = { version = "0.1.0", path = "../plum-config" }
 plum-core = { version = "0.1.0", path = "../plum-core" }
 plum-format = { version = "0.1.0", path = "../plum-format" }
 rfd = "0.17.2"
-
-[target.'cfg(windows)'.build-dependencies]
-winresource = "0.1"

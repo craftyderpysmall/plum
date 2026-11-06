@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<mime-info xmlns="http://www.freedesktop.org/standards/shared-mime-info">
+  <mime-type type="application/x-plum">
+    <comment>Plum whiteboard</comment>
+    <icon name="plum"/>
+    <glob pattern="*.plum"/>
+    <magic priority="60">
+      <match type="string" offset="0" value="PLUM\x89\r\n\x1a"/>
+    </magic>
+  </mime-type>
+</mime-info>

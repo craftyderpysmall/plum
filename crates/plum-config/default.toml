@@ -4,8 +4,7 @@
 #  This file defines EVERY setting. It is built into the app and can't break.
 #
 #  To customise, create files in your Plum config folder
-#  (Windows: %APPDATA%\plum\, macOS: ~/Library/Application Support/plum/,
-#   Linux: ~/.config/plum/):
+#  ($XDG_CONFIG_HOME/plum/, usually ~/.config/plum/):
 #
 #    config.toml        your personal overrides + which theme to use
 #    themes/<name>.toml custom themes
@@ -65,7 +64,8 @@ font_size        = 13.0
 # 1.0 = default, 2.0 = twice as fast, 0 = no animation.
 animation_speed  = 1.0
 # Path to a .ttf/.otf used for the interface and text elements;
-# "" = built-in JetBrains Mono.
+# "" = built-in JetBrains Mono. "~/" is your home folder; relative paths are
+# relative to this config folder (e.g. "fonts/Inter.ttf").
 font_file        = ""
 handle_size      = 8.0      # selection handles, in screen pixels
 rotate_handle_distance = 26.0
@@ -136,7 +136,7 @@ opacity   = 1.0
 color = 6
 
 # Each action takes a chord ("Ctrl+Shift+Z"), a list of chords, or [] for none.
-# Modifiers: Ctrl (Cmd on macOS), Shift, Alt. Keys use egui names
+# Modifiers: Ctrl, Shift, Alt. Keys use egui names
 # (A-Z, 0-9, F1-F12, Delete, Backspace, Escape, Enter, Space, ArrowUp,
 #  OpenBracket, CloseBracket, Plus, Minus, Comma, ...).
 # Tip: Menu → Settings lets you rebind these by pressing keys.

@@ -1,0 +1,13 @@
+[Desktop Entry]
+Type=Application
+Name=Plum
+GenericName=Whiteboard
+Comment=A minimal, fast, native whiteboard
+Exec=plum %f
+Icon=plum
+Terminal=false
+Categories=Graphics;2DGraphics;VectorGraphics;
+Keywords=whiteboard;drawing;sketch;diagram;canvas;
+MimeType=application/x-plum;
+StartupNotify=true
+StartupWMClass=plum

@@ -87,17 +87,35 @@ pub fn read(r: &mut impl Read, reg: &Registry) -> Result<Loaded, FormatError> {
 }
 
 /// Atomic save: write to a sibling temp file, then rename over the target.
+///
+/// A symlinked board is saved through to its target (the link survives), the
+/// existing file's permissions are kept, and the directory is synced so the
+/// rename itself is durable.
 pub fn save_to_path(board: &Board, path: &Path) -> Result<(), FormatError> {
+    let path = fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let tmp = path.with_extension("plum.tmp");
-    {
-        let mut w = BufWriter::new(fs::File::create(&tmp)?);
+    let result = (|| -> Result<(), FormatError> {
+        let file = fs::File::create(&tmp)?;
+        if let Ok(meta) = fs::metadata(&path) {
+            file.set_permissions(meta.permissions())?;
+        }
+        let mut w = BufWriter::new(file);
         write(board, &mut w, &Registry::default())?;
         w.flush()?;
         w.get_ref().sync_all()?;
-    }
-    fs::rename(&tmp, path).inspect_err(|_| {
+        drop(w);
+        fs::rename(&tmp, &path)?;
+        Ok(())
+    })();
+    if result.is_err() {
         let _ = fs::remove_file(&tmp);
-    })?;
+    }
+    result?;
+    if let Some(dir) = path.parent().filter(|d| !d.as_os_str().is_empty())
+        && let Ok(d) = fs::File::open(dir)
+    {
+        let _ = d.sync_all();
+    }
     Ok(())
 }
 

@@ -114,6 +114,14 @@ fn bad_value_is_an_error() {
 }
 
 #[test]
+fn non_ascii_colors_are_errors_not_panics() {
+    for bad in ["#a\u{e9}aaa", "#\u{e9}a", "#\u{e9}\u{e9}\u{e9}\u{e9}", "#\u{1F600}\u{1F600}"] {
+        assert!(Color::parse(bad).is_err(), "{bad:?}");
+    }
+    assert_eq!(Color::parse(" #AbC "), Ok(Color([0xaa, 0xbb, 0xcc, 255])));
+}
+
+#[test]
 fn missing_theme_falls_back_with_warning() {
     let user = t("theme = \"ghost\"");
     let r = resolve(Some(("config.toml", &user)), bundled_only).unwrap();

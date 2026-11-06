@@ -1,6 +1,7 @@
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc;
 use std::time::Instant;
 
 use egui::{CursorIcon, Id, Key, Modifiers, PointerButton, Pos2, Sense, ViewportCommand};
@@ -46,6 +47,16 @@ pub enum Pending {
     Close,
 }
 
+/// A native file dialog running on a background thread, so the window keeps
+/// answering the compositor (Wayland compositors flag apps that stop
+/// responding) while the user browses.
+struct FileDialog {
+    save: bool,
+    /// Pending action to run after a successful save (from the unsaved-changes prompt).
+    then: Option<Pending>,
+    rx: mpsc::Receiver<Option<PathBuf>>,
+}
+
 /// Before-state of a style-panel edit in progress. Only styles are kept,
 /// plus full copies of text elements (whose font size may change).
 struct StyleEdit {
@@ -82,6 +93,10 @@ pub struct PlumApp {
     pointer: Pointer,
     pub(crate) text_edit: Option<TextSession>,
     clipboard: Vec<Element>,
+    /// What we last put on the system clipboard when copying elements; a paste
+    /// of exactly this text means "paste the copied elements".
+    clipboard_tag: Option<String>,
+    file_dialog: Option<FileDialog>,
 
     pub(crate) path: Option<PathBuf>,
     allow_close: bool,
@@ -143,6 +158,8 @@ impl PlumApp {
             pointer: Pointer::Idle,
             text_edit: None,
             clipboard: Vec::new(),
+            clipboard_tag: None,
+            file_dialog: None,
             path: None,
             allow_close: false,
             title: String::new(),
@@ -185,7 +202,7 @@ impl PlumApp {
     fn apply_config(&mut self, ctx: &egui::Context, cfg: Config) {
         theme::apply_style(ctx, &cfg);
         if self.font_file.as_deref() != Some(cfg.ui.font_file.as_str()) {
-            if let Err(e) = theme::apply_fonts(ctx, &cfg) {
+            if let Err(e) = theme::apply_fonts(ctx, &cfg, self.dirs.root.as_deref()) {
                 self.toast(ctx, e, ToastKind::Warn);
             }
             self.font_file = Some(cfg.ui.font_file.clone());
@@ -340,6 +357,11 @@ impl PlumApp {
     // ------------------------------------------------------------------ actions
 
     pub(crate) fn do_action(&mut self, ctx: &egui::Context, action: Action) {
+        self.do_action_with(ctx, action, None);
+    }
+
+    /// `pasted` is the system clipboard text that came with a paste shortcut.
+    fn do_action_with(&mut self, ctx: &egui::Context, action: Action, pasted: Option<String>) {
         // Commands that change the board end any running gesture first.
         if !matches!(
             action,
@@ -373,17 +395,25 @@ impl PlumApp {
                 let off = DVec2::splat(self.snap_step().unwrap_or(16.0 / self.cam.zoom));
                 self.insert_copies(&els, off, "Duplicate");
             }
-            Action::Copy => self.clipboard = self.selection.snapshot(&self.board),
+            Action::Copy => self.copy_selection(ctx),
             Action::Cut => {
-                self.clipboard = self.selection.snapshot(&self.board);
+                self.copy_selection(ctx);
                 self.delete_selection();
             }
             Action::Paste => {
-                let els = self.clipboard.clone();
-                if let Some(obb) = plum_core::selection::group_obb(&els) {
-                    let target = ctx.input(|i| i.pointer.hover_pos()).filter(|p| self.cam.viewport.contains(*p)).unwrap_or(center);
-                    let off = snap_point(self.cam.screen_to_world(target) - obb.center, self.snap_step());
-                    self.insert_copies(&els, off, "Paste");
+                let target = ctx.input(|i| i.pointer.hover_pos()).filter(|p| self.cam.viewport.contains(*p)).unwrap_or(center);
+                // Text copied in another app becomes a text box; our own tag
+                // (or a paste without system text) pastes the copied elements.
+                let external = pasted.filter(|t| !t.trim().is_empty() && self.clipboard_tag.as_ref() != Some(t));
+                match external {
+                    Some(text) => self.paste_text(ctx, text, target),
+                    None => {
+                        let els = self.clipboard.clone();
+                        if let Some(obb) = plum_core::selection::group_obb(&els) {
+                            let off = snap_point(self.cam.screen_to_world(target) - obb.center, self.snap_step());
+                            self.insert_copies(&els, off, "Paste");
+                        }
+                    }
                 }
             }
             Action::FlipH | Action::FlipV | Action::RotateCw | Action::RotateCcw => {
@@ -422,12 +452,8 @@ impl PlumApp {
             Action::Settings => self.show_settings = !self.show_settings,
             Action::New => self.request(ctx, Pending::New),
             Action::Open => self.request(ctx, Pending::Open),
-            Action::Save => {
-                self.save(ctx);
-            }
-            Action::SaveAs => {
-                self.save_as(ctx);
-            }
+            Action::Save => self.save(ctx, None),
+            Action::SaveAs => self.save_as(ctx, None),
             Action::PerfOverlay => self.show_perf = !self.show_perf,
             Action::Deselect => {
                 if self.text_edit.is_some() {
@@ -465,6 +491,51 @@ impl PlumApp {
         let items = self.selection.transforms(&self.board);
         let cmd = Command::transforms(label, items.iter().map(|(id, t)| (*id, *t, op.transform(t))));
         self.history.execute(cmd, &mut self.board);
+    }
+
+    /// Copy the selection to the in-app clipboard, and its text (or a short
+    /// tag) to the system clipboard so other apps get something sensible and
+    /// a later paste can tell our copy from someone else's.
+    fn copy_selection(&mut self, ctx: &egui::Context) {
+        let els = self.selection.snapshot(&self.board);
+        if els.is_empty() {
+            return;
+        }
+        let texts: Vec<&str> = els
+            .iter()
+            .filter_map(|e| match &e.kind {
+                ElementKind::Text(t) => Some(t.content.as_str()),
+                _ => None,
+            })
+            .collect();
+        let tag = if texts.is_empty() {
+            format!("[{} Plum element{}]", els.len(), if els.len() == 1 { "" } else { "s" })
+        } else {
+            texts.join("\n")
+        };
+        ctx.copy_text(tag.clone());
+        self.clipboard_tag = Some(tag);
+        self.clipboard = els;
+    }
+
+    /// Paste plain text as a new text box centred on `at` (screen).
+    fn paste_text(&mut self, ctx: &egui::Context, text: String, at: Pos2) {
+        let content = text.replace("\r\n", "\n").replace('\t', "    ");
+        let font_size = (self.styles.font_size as f64 / self.cam.zoom) as f32;
+        let mut t = Text { content, font_size, align: TextAlign::Left, size: glam::Vec2::ZERO };
+        t.size = measure_text(ctx, &t);
+        let center = self.cam.screen_to_world(at);
+        let origin = snap_point(center - t.size.as_dvec2() * 0.5, self.snap_step());
+        let mut el = Element::new(ElementKind::Text(t), Transform::at(origin), self.styles.text);
+        el.id = self.board.alloc_id();
+        let id = el.id;
+        let mut cmd = Command::new("Paste text");
+        cmd.changes.push(Change::Insert { at: self.board.len(), element: el });
+        self.history.execute(cmd, &mut self.board);
+        if self.tool_kind != ToolKind::Select {
+            self.set_tool(ctx, ToolKind::Select, true);
+        }
+        self.selection.set([id]);
     }
 
     fn delete_selection(&mut self) {
@@ -621,20 +692,17 @@ impl PlumApp {
     /// Answer to the unsaved-changes prompt: `Some(true)` save, `Some(false)` discard, `None` cancel.
     pub(crate) fn resolve_pending(&mut self, ctx: &egui::Context, save: Option<bool>) {
         let Some(p) = self.confirm.take() else { return };
-        let proceed = match save {
-            Some(true) => self.save(ctx),
-            Some(false) => true,
-            None => false,
-        };
-        if proceed {
-            self.run_pending(ctx, p);
+        match save {
+            Some(true) => self.save(ctx, Some(p)),
+            Some(false) => self.run_pending(ctx, p),
+            None => {}
         }
     }
 
     fn run_pending(&mut self, ctx: &egui::Context, p: Pending) {
         match p {
             Pending::New => self.replace_board(Board::new(), None),
-            Pending::Open => self.open_dialog(ctx),
+            Pending::Open => self.start_file_dialog(ctx, false, None),
             Pending::Close => {
                 self.allow_close = true;
                 ctx.send_viewport_cmd(ViewportCommand::Close);
@@ -676,10 +744,59 @@ impl PlumApp {
         }
     }
 
-    fn open_dialog(&mut self, ctx: &egui::Context) {
-        let picked = rfd::FileDialog::new().add_filter("Plum whiteboard", &[plum_format::EXTENSION]).set_title("Open whiteboard").pick_file();
-        if let Some(p) = picked {
-            self.load_path(ctx, p);
+    pub(crate) fn file_dialog_open(&self) -> bool {
+        self.file_dialog.is_some()
+    }
+
+    /// Show the native open/save dialog without blocking the UI thread.
+    fn start_file_dialog(&mut self, ctx: &egui::Context, save: bool, then: Option<Pending>) {
+        if self.file_dialog.is_some() {
+            return;
+        }
+        let (tx, rx) = mpsc::channel();
+        let file_name = format!("{}.{}", self.display_name(), plum_format::EXTENSION);
+        let start_dir = self.path.as_ref().and_then(|p| p.parent()).filter(|p| !p.as_os_str().is_empty()).map(|p| p.to_path_buf());
+        let repaint = ctx.clone();
+        let spawned = std::thread::Builder::new().name("file-dialog".into()).spawn(move || {
+            let mut d = rfd::FileDialog::new().add_filter("Plum whiteboard", &[plum_format::EXTENSION]);
+            if let Some(dir) = start_dir {
+                d = d.set_directory(dir);
+            }
+            let picked = if save {
+                d.set_title("Save whiteboard").set_file_name(file_name).save_file()
+            } else {
+                d.set_title("Open whiteboard").pick_file()
+            };
+            let _ = tx.send(picked);
+            repaint.request_repaint();
+        });
+        match spawned {
+            Ok(_) => self.file_dialog = Some(FileDialog { save, then, rx }),
+            Err(e) => self.toast(ctx, format!("Couldn't show the file dialog: {e}"), ToastKind::Error),
+        }
+    }
+
+    /// Pick up the result of a finished file dialog.
+    fn poll_file_dialog(&mut self, ctx: &egui::Context) {
+        let Some(d) = &self.file_dialog else { return };
+        let picked = match d.rx.try_recv() {
+            Ok(p) => p,
+            Err(mpsc::TryRecvError::Empty) => return,
+            Err(mpsc::TryRecvError::Disconnected) => None,
+        };
+        let Some(FileDialog { save, then, .. }) = self.file_dialog.take() else { return };
+        let Some(mut path) = picked else { return };
+        if !save {
+            self.load_path(ctx, path);
+            return;
+        }
+        if path.extension().is_none_or(|e| e != plum_format::EXTENSION) {
+            path.set_extension(plum_format::EXTENSION);
+        }
+        if self.write_to(ctx, path)
+            && let Some(p) = then
+        {
+            self.run_pending(ctx, p);
         }
     }
 
@@ -695,28 +812,23 @@ impl PlumApp {
         }
     }
 
-    pub(crate) fn save(&mut self, ctx: &egui::Context) -> bool {
+    /// Save to the current file (or ask where), then run `then` on success.
+    pub(crate) fn save(&mut self, ctx: &egui::Context, then: Option<Pending>) {
         match self.path.clone() {
-            Some(p) => self.write_to(ctx, p),
-            None => self.save_as(ctx),
+            Some(p) => {
+                if self.write_to(ctx, p)
+                    && let Some(t) = then
+                {
+                    self.run_pending(ctx, t);
+                }
+            }
+            None => self.save_as(ctx, then),
         }
     }
 
-    pub(crate) fn save_as(&mut self, ctx: &egui::Context) -> bool {
-        let picked = rfd::FileDialog::new()
-            .add_filter("Plum whiteboard", &[plum_format::EXTENSION])
-            .set_file_name(format!("{}.{}", self.display_name(), plum_format::EXTENSION))
-            .set_title("Save whiteboard")
-            .save_file();
-        match picked {
-            Some(mut p) => {
-                if p.extension().is_none_or(|e| e != plum_format::EXTENSION) {
-                    p.set_extension(plum_format::EXTENSION);
-                }
-                self.write_to(ctx, p)
-            }
-            None => false,
-        }
+    pub(crate) fn save_as(&mut self, ctx: &egui::Context, then: Option<Pending>) {
+        self.commit_text(ctx);
+        self.start_file_dialog(ctx, true, then);
     }
 
     fn write_to(&mut self, ctx: &egui::Context, path: PathBuf) -> bool {
@@ -750,6 +862,11 @@ impl PlumApp {
 
     fn handle_close(&mut self, ctx: &egui::Context) {
         if !ctx.input(|i| i.viewport().close_requested()) || self.allow_close {
+            return;
+        }
+        if self.file_dialog.is_some() {
+            // Finish with the open/save dialog first.
+            ctx.send_viewport_cmd(ViewportCommand::CancelClose);
             return;
         }
         self.commit_text(ctx);
@@ -965,11 +1082,15 @@ impl eframe::App for PlumApp {
         self.cam.viewport = rect;
         let canvas = ui.interact(rect, Id::unique("plum-canvas"), Sense::click_and_drag());
 
+        self.poll_file_dialog(&ctx);
         if self.capturing.is_some() {
             self.capture_keybind(&ctx);
-        } else if !ctx.egui_wants_keyboard_input() && self.confirm.is_none() {
-            for action in self.keymap.take_actions(&ctx) {
-                self.do_action(&ctx, action);
+        } else if !ctx.egui_wants_keyboard_input() && self.confirm.is_none() && self.file_dialog.is_none() {
+            let taken = self.keymap.take_actions(&ctx);
+            let mut pasted = taken.pasted_text;
+            for action in taken.actions {
+                let text = if action == Action::Paste { pasted.take() } else { None };
+                self.do_action_with(&ctx, action, text);
             }
         }
         self.handle_canvas_input(&ctx, &canvas);
@@ -978,6 +1099,7 @@ impl eframe::App for PlumApp {
         self.paint_canvas(&ctx, &painter);
         crate::ui::text_editor(self, &ctx);
         crate::ui::confirm_modal(self, &ctx);
+        crate::ui::dialog_wait_modal(self, &ctx);
         crate::ui::settings_window(self, &ctx);
         crate::ui::chrome(self, &ctx);
 

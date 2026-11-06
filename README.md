@@ -5,7 +5,8 @@ pen, shapes, lines/arrows and text — every item is a selectable object you can
 move, resize, rotate and flip. Boards are saved as `.plum` files, and the whole
 look and every shortcut can be customized with TOML themes.
 
-Built on [egui](https://github.com/emilk/egui)/eframe (wgpu). No web runtime.
+Built on [egui](https://github.com/emilk/egui)/eframe (wgpu) for Linux: native
+Wayland, with X11 as a fallback. No web runtime.
 
 ## Features
 
@@ -18,36 +19,46 @@ Built on [egui](https://github.com/emilk/egui)/eframe (wgpu). No web runtime.
 
 ## Installing
 
-With [winget](https://learn.microsoft.com/windows/package-manager/) (Windows, x64):
+Download `plum-X.Y.Z-x86_64-linux.tar.gz` from
+[Releases](https://github.com/craftyderpysmall/plum/releases), extract it and run
+the installer:
 
-```powershell
-winget install craftyderpysmall.Plum
+```sh
+tar xzf plum-*-x86_64-linux.tar.gz
+cd plum-*-x86_64-linux
+./install.sh                          # into ~/.local (no root needed)
+sudo ./install.sh --prefix /usr/local # or system-wide
 ```
 
-Update with `winget upgrade craftyderpysmall.Plum`.
+This installs the `plum` binary, a desktop entry (so it shows up in your
+launcher and gets its icon on Wayland), the icon, and the `.plum` file type so
+boards open with a double-click. `./install.sh --uninstall` removes it again.
 
-Or download the zip from [Releases](https://github.com/craftyderpysmall/plum/releases).
+Runtime requirements: a Vulkan or OpenGL driver, and for the open/save dialogs
+`xdg-desktop-portal` (any backend) or `zenity`. Wayland, X11 and GPU libraries
+are loaded at runtime, so there are no other dependencies.
 
 ## Building
 
-Requires a recent stable Rust (edition 2024).
+Requires a recent stable Rust (edition 2024). No system `-dev` packages are
+needed.
 
 ```sh
 cargo run --release -p plum-app            # start with an empty board
 cargo run --release -p plum-app -- my.plum # open a board
 cargo test --workspace
+packaging/linux/install.sh                 # install the release build into ~/.local
 ```
 
-On Windows the default MSVC toolchain needs the Visual Studio C++ Build Tools;
-alternatively use the GNU toolchain: `cargo +stable-x86_64-pc-windows-gnu run ...`.
+Plum uses Wayland when `WAYLAND_DISPLAY` is set and X11 otherwise; run
+`env -u WAYLAND_DISPLAY plum` to force X11 (XWayland).
 
 Demo boards: `cargo run -p plum-format --example make_demo -- out.plum [--stress 100000]`.
 Press **F3** in the app for the performance overlay.
 
 ## Customizing
 
-Config lives in your config folder (`%APPDATA%\plum\` on Windows,
-`~/.config/plum/` on Linux, `~/Library/Application Support/plum/` on macOS):
+Config lives in `$XDG_CONFIG_HOME/plum/` (usually `~/.config/plum/`):
 
 ```
 config.toml          your overrides, e.g. theme = "light"
@@ -60,8 +71,12 @@ Settings resolve in layers — built-in `default.toml` → theme (and any theme 
 Files hot-reload while Plum runs. Bundled themes: `dark` (default) and `light`.
 
 You can configure colors, sizes, toolbar position, font (`ui.font_file`;
-JetBrains Mono by default), grid, palette, tool defaults, every keybind,
-animation speed, and performance knobs.
+JetBrains Mono by default; `~/` and paths relative to the config folder work),
+grid, palette, tool defaults, every keybind, animation speed, and performance
+knobs.
+
+Ctrl+C / Ctrl+V copy and paste board elements. Text copied in another app is
+pasted as a new text box.
 
 ## The `.plum` format
 
@@ -90,6 +105,7 @@ crates/
   plum-format/  .plum reader/writer and codec registry
   plum-config/  TOML layering, typed config, bundled themes, file watching
   plum-app/     the eframe app: rendering, tools, UI, keymap
+packaging/linux/  desktop entry, MIME type, install script
 ```
 
 ## License
